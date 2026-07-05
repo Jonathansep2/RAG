@@ -1,0 +1,10 @@
+pymupdf
+langchain
+langchain-community
+langchain-groq
+langchain-text-splitters
+faiss-cpu
+fastembed
+langgraph
+pydantic
+python-dotenv
