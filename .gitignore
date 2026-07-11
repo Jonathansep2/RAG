@@ -1,6 +1,40 @@
+# Entornos virtuales
 venv/
+.venv/
+env/
+.env/
+
+# Variables de entorno (contiene GROQ_API_KEY)
 .env
+
+# Caché de Python
 __pycache__/
 *.pyc
-.DS_Store
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 *.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs locales (en Streamlit Cloud la carpeta no existe)
+logs/
+
+# Streamlit secrets local (si haces pruebas)
+.streamlit/secrets.toml
+
+# FAISS cache index (se regenera en cada inicio)
+*.faiss
+*.pkl

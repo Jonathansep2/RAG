@@ -1,10 +1,18 @@
-pymupdf
-langchain
-langchain-community
-langchain-groq
-langchain-text-splitters
-faiss-cpu
-fastembed
-langgraph
-pydantic
-python-dotenv
+# Core
+pymupdf==1.25.3
+python-dotenv==1.1.0
+
+# LangChain ecosystem
+langchain==0.3.20
+langchain-community==0.3.19
+langchain-core==0.3.40
+langchain-groq==0.2.4
+langchain-text-splitters==0.3.6
+langgraph==0.3.16
+
+# Vector store & embeddings
+faiss-cpu==1.10.0
+fastembed==0.6.0
+
+# Web UI
+streamlit==1.42.1

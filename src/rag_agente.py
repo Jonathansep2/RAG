@@ -1,49 +1,253 @@
-﻿# -*- coding: utf-8 -*-
-"""Agente RAG local para ejecutar en VS Code usando documentos PDF desde la carpeta docs."""
+# -*- coding: utf-8 -*-
+"""Núcleo de AgronomIA: configuración, logging, RAG y workflow."""
 
 from __future__ import annotations
 
 import json
+import logging
 import os
+import re
+import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, TypedDict
+from typing import Dict, List, Optional, TypedDict
 
 from dotenv import load_dotenv
-
 from langchain_community.document_loaders import PyMuPDFLoader
 from langchain_community.embeddings import FastEmbedEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_groq import ChatGroq
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel, Field
+from langgraph.graph import END, START, StateGraph
 
+try:
+    from langchain_community.vectorstores import FAISS
+except ImportError:
+    FAISS = None
+
+try:
+    from langchain_groq import ChatGroq
+except ImportError:
+    ChatGroq = None
+
+
+def configurar_salida_utf8() -> None:
+    """Evita errores y texto roto en consolas Windows con cp1252."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except Exception:
+                pass
+
+
+configurar_salida_utf8()
+
+
+# ============================================================================
+# CONFIGURACIÓN
+# ============================================================================
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DOCS_DIR = ROOT_DIR / "docs"
 ENV_FILE = ROOT_DIR / ".env"
+LOGS_DIR = ROOT_DIR / "logs"
 
 load_dotenv(ENV_FILE)
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+LLM_MODEL = "llama-3.3-70b-versatile"
+LLM_TEMPERATURE = 0
 
-class TriajeOut(BaseModel):
-    decision: Literal["AUTO_RESOLVER", "PEDIR_INFO", "ABRIR_TICKET"]
-    urgencia: Literal["BAJA", "MEDIANA", "ALTA"]
-    campos_faltantes: List[str] = Field(default_factory=list)
+CHUNK_SIZE = 300
+CHUNK_OVERLAP = 30
+RETRIEVER_K = 5
+EMBEDDINGS_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
+# Detecta si estamos en Streamlit Cloud (entorno efímero sin escritura persistente)
+EN_STREAMLIT_CLOUD = os.getenv("STREAMLIT_RUN_ON_SAVE") is not None or os.getenv("STREAMLIT_SERVER_BASE_URL") is not None
+
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+_log_handlers: list = [logging.StreamHandler()]
+
+if not EN_STREAMLIT_CLOUD:
+    try:
+        LOGS_DIR.mkdir(exist_ok=True)
+        _log_handlers.append(
+            logging.FileHandler(LOGS_DIR / "rag_agente.log", encoding="utf-8")
+        )
+    except Exception:
+        pass  # Si no se puede crear el archivo de log, solo usamos consola
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=_log_handlers,
+)
+
+logger = logging.getLogger("AgronomIA")
+
+
+def log_info(message: str) -> None:
+    logger.info(message)
+
+
+def log_warning(message: str) -> None:
+    logger.warning(message)
+
+
+def log_error(message: str) -> None:
+    logger.error(message)
+
+
+def log_debug(message: str) -> None:
+    logger.debug(message)
+
+
+# ============================================================================
+# PROMPTS
+# ============================================================================
+
+PROMPT_TRIAJE = """Eres un especialista en triaje para un asistente técnico agrícola.
+Analiza el siguiente mensaje y devuelve ÚNICAMENTE un JSON válido con este formato exacto:
+{"decision": "AUTO_RESOLVER", "urgencia": "BAJA", "campos_faltantes": []}
+
+Reglas:
+- decision puede ser: "AUTO_RESOLVER" (preguntas técnicas sobre cultivo, plagas, enfermedades, productos, dosis) | "PEDIR_INFO" (preguntas imprecisas o genéricas) | "ABRIR_TICKET" (solicitudes de asesoría personalizada, urgencias)
+- urgencia puede ser: "BAJA" | "MEDIANA" | "ALTA"
+- campos_faltantes es un array de strings, vacío si no hay campos faltantes.
+
+Responde SOLO con JSON válido, sin explicaciones adicionales."""
+
+PROMPT_SYSTEM_RAG = (
+    "Eres AgronomIA, un asistente técnico especializado en cultivo de cannabis medicinal. "
+    "Tu rol es ayudar a ingenieros agrónomos con preguntas sobre manejo fitosanitario, "
+    "plagas, enfermedades, agroinsumos y recomendaciones de aplicación. "
+    "Responde usando únicamente la información del contexto proporcionado. "
+    "Si no hay información suficiente, responde exactamente: No lo sé."
+)
+
+
+# ============================================================================
+# TIPOS Y VALIDACIÓN
+# ============================================================================
 
 class AgentState(TypedDict, total=False):
+    """Estado compartido por los nodos del workflow."""
+
     pregunta: str
     triaje: dict
-    respuesta: Optional[str]
-    citaciones: Optional[list]
-    documentos_encontrados: Optional[bool]
+    respuesta: str | None
+    citaciones: list | None
+    documentos_encontrados: bool
     rag_exito: bool
     accion_final: str
 
 
+def validar_pregunta(pregunta: str) -> Optional[str]:
+    """Valida la pregunta del usuario antes de enviarla al agente."""
+    if not pregunta:
+        error = "La pregunta no puede estar vacía"
+        log_warning(error)
+        return error
+
+    if len(pregunta) < 5:
+        error = "La pregunta es muy corta (mínimo 5 caracteres)"
+        log_warning(error)
+        return error
+
+    if len(pregunta) > 2000:
+        error = "La pregunta es muy larga (máximo 2000 caracteres)"
+        log_warning(error)
+        return error
+
+    if not any(c.isalpha() for c in pregunta):
+        error = "La pregunta debe contener al menos una palabra válida"
+        log_warning(error)
+        return error
+
+    return None
+
+
+def validar_estado(state: dict) -> Optional[str]:
+    """Valida que el estado del agente tenga la pregunta necesaria."""
+    if not state or "pregunta" not in state:
+        return "El estado debe contener una pregunta"
+    return validar_pregunta(state["pregunta"])
+
+
+# ============================================================================
+# CITACIONES
+# ============================================================================
+
+@dataclass
+class Citacion:
+    """Representa una cita tomada de un documento recuperado."""
+
+    contenido: str
+    pagina: Optional[int] = None
+    fuente: Optional[str] = None
+    relevancia: Optional[float] = None
+
+    def __str__(self) -> str:
+        resultado = self.contenido[:150].replace("\n", " ")
+        if self.relevancia:
+            resultado += f" (relevancia: {self.relevancia:.1%})"
+        if self.pagina:
+            resultado += f" [p. {self.pagina}]"
+        if self.fuente:
+            resultado += f" - {self.fuente}"
+        return resultado
+
+
+def extraer_citaciones(documentos_relacionados: list) -> List[Citacion]:
+    """Convierte documentos recuperados en citas legibles."""
+    citaciones = []
+    for doc in documentos_relacionados:
+        metadata = getattr(doc, "metadata", {})
+        fuente = metadata.get("source")
+        if fuente:
+            fuente = fuente.split("\\")[-1].split("/")[-1]
+
+        citaciones.append(
+            Citacion(
+                contenido=getattr(doc, "page_content", str(doc)),
+                pagina=metadata.get("page"),
+                fuente=fuente,
+            )
+        )
+
+    return citaciones
+
+
+def formatear_citaciones(citaciones: List[Citacion], max_citaciones: int = 5) -> str:
+    """Formatea citas para mostrarlas en consola."""
+    if not citaciones:
+        return ""
+
+    citaciones_limitadas = citaciones[:max_citaciones]
+    resultado = f"\nFuentes ({len(citaciones_limitadas)} de {len(citaciones)}):\n"
+
+    for i, citacion in enumerate(citaciones_limitadas, start=1):
+        resultado += f"   {i}. {citacion}\n"
+
+    if len(citaciones) > max_citaciones:
+        resultado += f"\n   ... y {len(citaciones) - max_citaciones} más"
+
+    return resultado
+
+
+# ============================================================================
+# DOCUMENTOS Y RETRIEVER
+# ============================================================================
+
 class EmbeddingsSimples(Embeddings):
+    """Fallback mínimo cuando FastEmbed no está disponible."""
+
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return [[float(sum(ord(ch) for ch in text.lower()) % 1000)] for text in texts]
 
@@ -51,32 +255,83 @@ class EmbeddingsSimples(Embeddings):
         return [float(sum(ord(ch) for ch in text.lower()) % 1000)]
 
 
-PROMPT_TRIAJE = """
-Eres un especialista en triaje del Service Desk para políticas internas.
-Dado el mensaje del usuario, devuelve SOLO un JSON con este formato:
-{
-  "decision": "AUTO_RESOLVER" | "PEDIR_INFO" | "ABRIR_TICKET",
-  "urgencia": "BAJA" | "MEDIANA" | "ALTA",
-  "campos_faltantes": ["..."]
-}
-Reglas:
-- AUTO_RESOLVER: preguntas claras sobre reglas o procedimientos descritos en las políticas.
-- PEDIR_INFO: mensajes imprecisos o sin contexto suficiente.
-- ABRIR_TICKET: solicitudes de excepciones, autorizaciones, aprobaciones o acceso especial.
-Responde solo con JSON válido.
-"""
+def cargar_documentos(docs_dir: Path = DOCS_DIR) -> List:
+    """Carga todos los PDFs disponibles en la carpeta docs."""
+    if not docs_dir.exists():
+        error = f"No existe la carpeta de documentos: {docs_dir}"
+        log_error(error)
+        raise FileNotFoundError(error)
+
+    pdf_files = sorted(docs_dir.glob("*.pdf"))
+    if not pdf_files:
+        error = f"No se encontraron archivos PDF en: {docs_dir}"
+        log_error(error)
+        raise FileNotFoundError(error)
+
+    log_info(f"Cargando {len(pdf_files)} archivo(s) PDF...")
+    documentos = []
+    for pdf_path in pdf_files:
+        try:
+            docs = PyMuPDFLoader(str(pdf_path)).load()
+            documentos.extend(docs)
+            log_info(f"OK {pdf_path.name} cargado ({len(docs)} páginas)")
+        except Exception as exc:
+            log_error(f"Error cargando {pdf_path.name}: {exc}")
+
+    if not documentos:
+        error = "No fue posible cargar ningún documento PDF."
+        log_error(error)
+        raise ValueError(error)
+
+    log_info(f"Total de documentos cargados: {len(documentos)}")
+    return documentos
 
 
-def cargar_llm() -> Optional[ChatGroq]:
-    groq_api_key = os.getenv("GROQ_API_KEY")
-    if not groq_api_key:
-        print("GROQ_API_KEY no configurada; se usará un modo fallback local.")
+def crear_retriever(documentos: List):
+    """Crea un retriever FAISS a partir de los documentos cargados."""
+    if FAISS is None:
+        raise ImportError("FAISS no está disponible. Instala la dependencia faiss-cpu.")
+
+    log_info("Dividiendo documentos en chunks...")
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE,
+        chunk_overlap=CHUNK_OVERLAP,
+    )
+    chunks = splitter.split_documents(documentos)
+    log_info(f"Total de chunks creados: {len(chunks)}")
+
+    try:
+        embeddings = FastEmbedEmbeddings(model_name=EMBEDDINGS_MODEL)
+        log_info("OK Usando FastEmbedEmbeddings")
+    except Exception as exc:
+        log_warning(f"FastEmbedEmbeddings no disponible, usando embeddings simples: {exc}")
+        embeddings = EmbeddingsSimples()
+
+    log_info("Creando FAISS vectorstore...")
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    log_info("OK Vectorstore creado exitosamente")
+
+    return vectorstore.as_retriever(search_kwargs={"k": RETRIEVER_K})
+
+
+# ============================================================================
+# LLM, TRIAJE Y RAG
+# ============================================================================
+
+def cargar_llm() -> Optional[object]:
+    """Carga ChatGroq si existe API key y la dependencia está instalada."""
+    if ChatGroq is None:
+        log_warning("langchain-groq no está disponible; se usará modo fallback local.")
+        return None
+
+    if not GROQ_API_KEY:
+        log_warning("GROQ_API_KEY no configurada; se usará modo fallback local.")
         return None
 
     return ChatGroq(
-        model="llama-3.3-70b-versatile",
-        temperature=0,
-        api_key=groq_api_key,
+        model=LLM_MODEL,
+        temperature=LLM_TEMPERATURE,
+        api_key=GROQ_API_KEY,
     )
 
 
@@ -84,132 +339,154 @@ llm = cargar_llm()
 
 
 def triaje(mensaje: str) -> Dict:
-    if llm is None:
-        mensaje_low = mensaje.lower()
-        if any(palabra in mensaje_low for palabra in ["excepción", "autoriz", "aprobar", "acceso", "abrir ticket", "ticket"]):
-            decision = "ABRIR_TICKET"
-            urgencia = "ALTA"
-        elif any(palabra in mensaje_low for palabra in ["cómo", "puedo", "política", "reembolso", "vacaciones", "comidas"]):
-            decision = "AUTO_RESOLVER"
-            urgencia = "BAJA"
-        else:
-            decision = "PEDIR_INFO"
-            urgencia = "MEDIANA"
-
+    """Clasifica la pregunta para decidir el siguiente paso del workflow."""
+    error = validar_pregunta(mensaje)
+    if error:
+        log_error(f"Validación de pregunta fallida: {error}")
         return {
-            "decision": decision,
-            "urgencia": urgencia,
-            "campos_faltantes": [],
-        }
-
-    respuesta = llm.invoke(
-        [
-            SystemMessage(content=PROMPT_TRIAJE),
-            HumanMessage(content=mensaje),
-        ]
-    )
-    texto = respuesta.content.strip()
-
-    try:
-        datos = json.loads(texto)
-    except json.JSONDecodeError:
-        datos = {
             "decision": "PEDIR_INFO",
-            "urgencia": "MEDIA",
-            "campos_faltantes": ["No se pudo interpretar la respuesta del modelo"],
+            "urgencia": "MEDIANA",
+            "campos_faltantes": [error],
         }
 
-    return {
-        "decision": datos.get("decision", "PEDIR_INFO"),
-        "urgencia": datos.get("urgencia", "MEDIA"),
-        "campos_faltantes": datos.get("campos_faltantes", []),
-    }
+    log_info(f"Realizando triaje: {mensaje[:100]}...")
 
-
-def cargar_documentos(docs_dir: Path) -> List:
-    if not docs_dir.exists():
-        raise FileNotFoundError(f"No existe la carpeta de documentos: {docs_dir}")
-
-    pdf_files = sorted(docs_dir.glob("*.pdf"))
-    if not pdf_files:
-        raise FileNotFoundError(f"No se encontraron archivos PDF en: {docs_dir}")
-
-    documentos = []
-    for pdf_path in pdf_files:
-        try:
-            loader = PyMuPDFLoader(str(pdf_path))
-            documentos.extend(loader.load())
-            print(f"Archivo cargado: {pdf_path.name}")
-        except Exception as exc:
-            print(f"No se pudo cargar {pdf_path.name}: {exc}")
-
-    if not documentos:
-        raise ValueError("No fue posible cargar ningún documento PDF.")
-
-    return documentos
-
-
-def crear_retriever(documentos: List):
-    splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=30)
-    chunks = splitter.split_documents(documentos)
+    if llm is None:
+        return triaje_local(mensaje)
 
     try:
-        embeddings = FastEmbedEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        respuesta = llm.invoke(
+            [
+                SystemMessage(content=PROMPT_TRIAJE),
+                HumanMessage(content=mensaje),
+            ]
+        )
+        datos = extraer_json_triaje(respuesta.content.strip())
+        resultado = {
+            "decision": datos.get("decision", "PEDIR_INFO"),
+            "urgencia": datos.get("urgencia", "MEDIANA"),
+            "campos_faltantes": datos.get("campos_faltantes", []),
+        }
+        log_info(f"Triaje: {resultado['decision']} - {resultado['urgencia']}")
+        return resultado
     except Exception as exc:
-        print(f"No se pudo cargar FastEmbedEmbeddings; se usará un fallback simple: {exc}")
-        embeddings = EmbeddingsSimples()
-
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-
-    return vectorstore.as_retriever(
-        search_type="similarity_score_threshold",
-        search_kwargs={"score_threshold": 0.3, "k": 1},
-    )
+        log_error(f"Error en triaje con LLM: {exc}")
+        return triaje_local(mensaje)
 
 
-def construir_prompt_rag(pregunta: str, documentos_relacionados: List) -> List:
-    contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
-    return [
-        SystemMessage(
-            content=(
-                "Eres un especialista en RR.HH. de la empresa Carraro Desarrollo de Software. "
-                "Responde usando únicamente la información del contexto proporcionado. "
-                "Si no hay información suficiente, responde exactamente: No lo sé."
-            )
-        ),
-        HumanMessage(content=f"Contexto:\n{contexto}\n\nPregunta del empleado: {pregunta}"),
+def triaje_local(mensaje: str) -> Dict:
+    """Fallback simple para clasificar preguntas sin LLM."""
+    mensaje_low = mensaje.lower()
+    palabras_ticket = [
+        "recomendar",
+        "asesoría",
+        "asesoria",
+        "ayuda",
+        "urgente",
+        "problema",
+        "emergencia",
+        "ticket",
+    ]
+    palabras_rag = [
+        "qué",
+        "que",
+        "cuál",
+        "cual",
+        "cómo",
+        "como",
+        "ingrediente",
+        "dosis",
+        "fungicida",
+        "insecticida",
+        "síntoma",
+        "sintoma",
+        "enfermedad",
+        "plaga",
+        "aplicación",
+        "aplicacion",
+        "controla",
+        "periodo",
+        "período",
     ]
 
+    if any(palabra in mensaje_low for palabra in palabras_ticket):
+        decision, urgencia = "ABRIR_TICKET", "ALTA"
+    elif any(palabra in mensaje_low for palabra in palabras_rag):
+        decision, urgencia = "AUTO_RESOLVER", "BAJA"
+    else:
+        decision, urgencia = "PEDIR_INFO", "MEDIANA"
 
-# Carga inicial de documentos
-DOCUMENTOS = cargar_documentos(DOCS_DIR)
-RETRIEVER = crear_retriever(DOCUMENTOS)
+    log_info(f"Triaje (fallback): {decision} - {urgencia}")
+    return {"decision": decision, "urgencia": urgencia, "campos_faltantes": []}
 
 
-def busqueda_de_respuestas_RAG(pregunta: str) -> Dict:
-    documentos_relacionados = RETRIEVER.invoke(pregunta)
+def extraer_json_triaje(texto: str) -> Dict:
+    """Extrae el JSON de triaje incluso si el modelo agrega texto adicional."""
+    try:
+        return json.loads(texto)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", texto, re.DOTALL)
+        if not match:
+            log_warning("No se pudo extraer JSON del triaje")
+            return {
+                "decision": "PEDIR_INFO",
+                "urgencia": "MEDIANA",
+                "campos_faltantes": ["Error al parsear respuesta del modelo"],
+            }
+
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            log_warning(f"No se pudo parsear JSON del triaje: {texto[:100]}")
+            return {
+                "decision": "PEDIR_INFO",
+                "urgencia": "MEDIANA",
+                "campos_faltantes": ["Error al parsear respuesta del modelo"],
+            }
+
+
+def busqueda_de_respuestas_RAG(pregunta: str, retriever) -> Dict:
+    """Busca contexto en los PDFs y genera una respuesta."""
+    log_info(f"Buscando respuesta RAG para: {pregunta[:80]}...")
+    documentos_relacionados = retriever.invoke(pregunta)
 
     if not documentos_relacionados:
+        log_warning("No se encontraron documentos relacionados")
         return {
             "respuesta": "No lo sé",
             "citaciones": [],
             "documentos_encontrados": False,
         }
+
+    log_info(f"OK {len(documentos_relacionados)} documento(s) encontrado(s)")
 
     if llm is None:
-        contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
-        answer = f"He encontrado información relevante en los documentos. Resumen: {contexto[:600]}"
+        answer = resumir_contexto_recuperado(documentos_relacionados)
     else:
-        respuesta = llm.invoke(construir_prompt_rag(pregunta, documentos_relacionados))
-        answer = getattr(respuesta, "content", str(respuesta)).strip()
+        try:
+            contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
+            respuesta = llm.invoke(
+                [
+                    SystemMessage(content=PROMPT_SYSTEM_RAG),
+                    HumanMessage(
+                        content=f"Contexto:\n{contexto}\n\nPregunta del agrónomo: {pregunta}"
+                    ),
+                ]
+            )
+            answer = getattr(respuesta, "content", str(respuesta)).strip()
+        except Exception as exc:
+            log_error(f"Error generando respuesta RAG: {exc}")
+            answer = resumir_contexto_recuperado(documentos_relacionados)
 
     if answer.rstrip(".?!") == "No lo sé":
+        log_info("Respuesta: No lo sé")
         return {
             "respuesta": "No lo sé",
             "citaciones": [],
             "documentos_encontrados": False,
         }
 
+    log_info(f"OK Respuesta generada ({len(answer)} caracteres)")
     return {
         "respuesta": answer,
         "citaciones": documentos_relacionados,
@@ -217,40 +494,54 @@ def busqueda_de_respuestas_RAG(pregunta: str) -> Dict:
     }
 
 
-def nodo_triaje(state: AgentState) -> AgentState:
+def resumir_contexto_recuperado(documentos_relacionados: list) -> str:
+    """Respuesta mínima cuando el LLM no está disponible."""
+    contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
+    return f"He encontrado información relevante. Resumen:\n{contexto[:500]}"
+
+
+# ============================================================================
+# WORKFLOW
+# ============================================================================
+
+def nodo_triaje(state: AgentState) -> dict:
+    """Nodo que realiza triaje de la pregunta."""
     return {"triaje": triaje(state["pregunta"])}
 
 
-def nodo_auto_resolver(state: AgentState) -> AgentState:
-    respuesta_RAG = busqueda_de_respuestas_RAG(state["pregunta"])
-    update: AgentState = {
-        "respuesta": respuesta_RAG["respuesta"],
-        "citaciones": respuesta_RAG["citaciones"],
-        "rag_exito": respuesta_RAG["documentos_encontrados"],
+def nodo_auto_resolver(state: AgentState, retriever) -> dict:
+    """Nodo que intenta resolver usando RAG."""
+    respuesta_rag = busqueda_de_respuestas_RAG(state["pregunta"], retriever)
+    rag_exito = respuesta_rag["documentos_encontrados"]
+    return {
+        "respuesta": respuesta_rag["respuesta"],
+        "citaciones": respuesta_rag["citaciones"],
+        "rag_exito": rag_exito,
+        "accion_final": "AUTO_RESOLVER" if rag_exito else "PEDIR_INFO",
     }
 
-    update["accion_final"] = "AUTO_RESOLVER" if respuesta_RAG["documentos_encontrados"] else "pedir_info"
-    return update
 
-
-def nodo_pedir_info(state: AgentState) -> AgentState:
+def nodo_pedir_info(state: AgentState) -> dict:
+    """Nodo que pide más información al usuario."""
     return {
-        "respuesta": "Necesito más información sobre tu pedido.",
+        "respuesta": "Necesito más información sobre tu consulta. ¿Puedes proporcionar detalles adicionales?",
         "citaciones": [],
         "accion_final": "PEDIR_INFO",
     }
 
 
-def nodo_abrir_ticket(state: AgentState) -> AgentState:
+def nodo_abrir_ticket(state: AgentState) -> dict:
+    """Nodo que simula la apertura de un ticket de soporte."""
     tri = state["triaje"]
     return {
-        "respuesta": f"Abrir ticket con urgencia {tri['urgencia']}. Pedido: {state['pregunta']}.",
+        "respuesta": f"Se abrirá un ticket de soporte con urgencia {tri['urgencia']}. Consulta: {state['pregunta']}",
         "citaciones": [],
         "accion_final": "ABRIR_TICKET",
     }
 
 
 def arista_decision_triaje(state: AgentState) -> str:
+    """Decide el siguiente nodo basado en el triaje inicial."""
     tri = state["triaje"]
     if tri["decision"] == "AUTO_RESOLVER":
         return "rag"
@@ -260,61 +551,134 @@ def arista_decision_triaje(state: AgentState) -> str:
 
 
 def arista_decision_rag(state: AgentState) -> str:
+    """Decide qué hacer si la búsqueda RAG no resolvió la consulta."""
     if state["rag_exito"]:
         return "ok"
 
-    keywords = ["aprobación", "aprobar", "excepción", "liberación", "autorización", "autorizar", "abrir ticket", "acceso especial"]
+    keywords = [
+        "recomendar",
+        "asesoría",
+        "asesoria",
+        "urgente",
+        "emergencia",
+        "ayuda",
+        "necesito",
+        "problema",
+        "ticket",
+    ]
     if any(keyword in state["pregunta"].lower() for keyword in keywords):
         return "ticket"
     return "info"
 
 
-from langgraph.graph import END, START, StateGraph
+def crear_workflow(retriever):
+    """Crea el grafo LangGraph del agente."""
+    workflow = StateGraph(AgentState)
+    workflow.add_node("triaje", nodo_triaje)
+    workflow.add_node("auto_resolver", lambda state: nodo_auto_resolver(state, retriever))
+    workflow.add_node("pedir_info", nodo_pedir_info)
+    workflow.add_node("abrir_ticket", nodo_abrir_ticket)
+
+    workflow.add_edge(START, "triaje")
+    workflow.add_conditional_edges(
+        "triaje",
+        arista_decision_triaje,
+        {"rag": "auto_resolver", "info": "pedir_info", "ticket": "abrir_ticket"},
+    )
+    workflow.add_conditional_edges(
+        "auto_resolver",
+        arista_decision_rag,
+        {"info": "pedir_info", "ticket": "abrir_ticket", "ok": END},
+    )
+    workflow.add_edge("pedir_info", END)
+    workflow.add_edge("abrir_ticket", END)
+
+    return workflow.compile()
 
 
-workflow = StateGraph(AgentState)
-workflow.add_node("triaje", nodo_triaje)
-workflow.add_node("auto_resolver", nodo_auto_resolver)
-workflow.add_node("pedir_info", nodo_pedir_info)
-workflow.add_node("abrir_ticket", nodo_abrir_ticket)
-workflow.add_edge(START, "triaje")
-workflow.add_conditional_edges(
-    "triaje",
-    arista_decision_triaje,
-    {"rag": "auto_resolver", "info": "pedir_info", "ticket": "abrir_ticket"},
-)
-workflow.add_conditional_edges(
-    "auto_resolver",
-    arista_decision_rag,
-    {"info": "pedir_info", "ticket": "abrir_ticket", "ok": END},
-)
-workflow.add_edge("pedir_info", END)
-workflow.add_edge("abrir_ticket", END)
+# ============================================================================
+# INTERFAZ CLI
+# ============================================================================
 
-grafo = workflow.compile()
+import argparse
 
 
-def ejecutar_consulta(pregunta: str) -> Dict:
+def ejecutar_consulta(pregunta: str, grafo) -> Dict:
+    """Ejecuta una consulta a través del agente RAG."""
     return grafo.invoke({"pregunta": pregunta})
 
 
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Ejecuta el agente RAG sobre los PDFs de la carpeta docs")
-    parser.add_argument("pregunta", nargs="?", default="¿Puedo obtener un reembolso por el internet de mi home office?", help="Pregunta a evaluar")
+def main():
+    """Punto de entrada principal del sistema."""
+    parser = argparse.ArgumentParser(
+        description="AgronomIA - Agente RAG para cultivo de cannabis medicinal"
+    )
+    parser.add_argument(
+        "pregunta",
+        nargs="?",
+        default="¿Qué producto controla Botrytis?",
+        help="Pregunta a evaluar",
+    )
     args = parser.parse_args()
 
-    print(f"\nPregunta: {args.pregunta}")
+    print("\n" + "="*70)
+    print("🌾 AgronomIA - Asistente Técnico en Cultivo de Cannabis Medicinal")
+    print("="*70)
+
+    log_info("="*70)
+    log_info("Iniciando AgronomIA")
+    log_info("="*70)
+
+    # Validar pregunta
+    error_validacion = validar_pregunta(args.pregunta)
+    if error_validacion:
+        print(f"\nValidación fallida: {error_validacion}")
+        log_error(f"Validación fallida: {error_validacion}")
+        return
+
     try:
-        resultado = ejecutar_consulta(args.pregunta)
-    except Exception as exc:
-        print(f"Error al ejecutar el agente: {exc}")
+        # Cargar documentos y crear retriever
+        print("\n📚 Cargando documentos...")
+        documentos = cargar_documentos(DOCS_DIR)
+        print("\n🔄 Creando retriever...")
+        retriever = crear_retriever(documentos)
+
+        # Crear workflow
+        print("⚙ Inicializando flujo de trabajo...\n")
+        log_info("Workflow inicializado")
+        grafo = crear_workflow(retriever)
+
+        # Ejecutar consulta
+        print(f"❓ Pregunta: {args.pregunta}\n")
+        log_info(f"Ejecutando consulta: {args.pregunta}")
+        resultado = ejecutar_consulta(args.pregunta, grafo)
+
+        # Mostrar resultados
+        print("\n" + "-"*70)
+        print("📊 Triaje:")
+        print(f"   Decisión: {resultado['triaje']['decision']}")
+        print(f"   Urgencia: {resultado['triaje']['urgencia']}")
+
+        print("\n💬 Respuesta:")
+        print(f"   {resultado['respuesta']}")
+
+        if resultado.get("citaciones"):
+            citaciones = extraer_citaciones(resultado["citaciones"])
+            print("📖 " + formatear_citaciones(citaciones).lstrip("\n").replace("\n", "\n"))
+
+        print("\n" + "="*70)
+        log_info("Consulta completada exitosamente")
+
+    except FileNotFoundError as e:
+        print(f"Error: {e}")
+        print("\nAsegúrate de que la carpeta 'docs/' contiene los archivos PDF.")
+        log_error(f"FileNotFoundError: {e}")
+        raise
+    except Exception as e:
+        print(f"Error al ejecutar el agente: {e}")
+        log_error(f"Error en ejecución: {e}")
         raise
 
-    print(f"Decisión de triaje: {resultado['triaje']['decision']} | urgencia: {resultado['triaje']['urgencia']}")
-    print(f"Respuesta: {resultado['respuesta']}")
-    if resultado.get("citaciones"):
-        print("Citas encontradas:")
-        for i, citacion in enumerate(resultado["citaciones"], start=1):
-            print(f"- {i}. {citacion.page_content[:180].replace(chr(10), ' ')}")
+
+if __name__ == "__main__":
+    main()
