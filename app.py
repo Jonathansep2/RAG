@@ -46,10 +46,10 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* === FUENTES Y GLOBAL === */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
     * {
-        font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     
     /* === FONDO PRINCIPAL === */
@@ -57,13 +57,17 @@ st.markdown("""
         background: linear-gradient(135deg, #f0f7f0 0%, #e8f5e9 30%, #f1f8e9 70%, #fff8e1 100%);
     }
     
+    .main > div {
+        padding-top: 1rem;
+    }
+    
     /* === HEADER === */
     .header-container {
         background: linear-gradient(135deg, #1b5e20 0%, #2e7d32 40%, #388e3c 70%, #43a047 100%);
-        padding: 2.5rem 3rem;
-        border-radius: 0 0 32px 32px;
-        margin: -4rem -4rem 2rem -4rem;
-        box-shadow: 0 8px 32px rgba(27, 94, 32, 0.3);
+        padding: 2rem 2.5rem;
+        border-radius: 0 0 28px 28px;
+        margin: -3rem -3rem 1.5rem -3rem;
+        box-shadow: 0 6px 24px rgba(27, 94, 32, 0.25);
         position: relative;
         overflow: hidden;
     }
@@ -71,17 +75,13 @@ st.markdown("""
     .header-container::before {
         content: '';
         position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         pointer-events: none;
     }
     
     .header-title {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-size: 2.5rem;
+        font-size: 1.8rem;
         font-weight: 800;
         color: white;
         margin: 0;
@@ -91,29 +91,12 @@ st.markdown("""
     }
     
     .header-subtitle {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.05rem;
+        font-size: 0.9rem;
         font-weight: 400;
-        color: rgba(255, 255, 255, 0.85);
-        margin-top: 0.5rem;
+        color: rgba(255, 255, 255, 0.8);
+        margin-top: 0.35rem;
         position: relative;
         z-index: 1;
-    }
-    
-    .header-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: rgba(255, 255, 255, 0.15);
-        backdrop-filter: blur(10px);
-        padding: 0.35rem 1rem;
-        border-radius: 100px;
-        font-size: 0.8rem;
-        color: white;
-        margin-top: 1rem;
-        position: relative;
-        z-index: 1;
-        border: 1px solid rgba(255, 255, 255, 0.2);
     }
     
     /* === SIDEBAR === */
@@ -122,144 +105,55 @@ st.markdown("""
         border-right: 1px solid rgba(255, 255, 255, 0.05);
     }
     
-    section[data-testid="stSidebar"] .stApp {
-        background: transparent;
-    }
-    
-    section[data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
-        padding: 1.5rem 1rem;
-    }
+    section[data-testid="stSidebar"] .stApp { background: transparent; }
     
     .sidebar-logo {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-        font-size: 1.5rem;
+        font-size: 1.4rem;
         font-weight: 800;
         color: #81c784;
         text-align: center;
         padding: 0.5rem;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
         letter-spacing: -0.5px;
     }
     
     .sidebar-section-title {
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         font-weight: 700;
-        color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.35);
         text-transform: uppercase;
         letter-spacing: 1.5px;
-        margin: 1.5rem 0 0.75rem 0;
+        margin: 1.25rem 0 0.6rem 0;
         padding: 0 0.5rem;
     }
     
-    /* === MÉTRICAS DEL SIDEBAR === */
     .sidebar-metric {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
-        padding: 0.75rem 1rem;
-        margin-bottom: 0.5rem;
+        padding: 0.65rem 1rem;
+        margin-bottom: 0.4rem;
     }
     
     .sidebar-metric-label {
-        font-size: 0.75rem;
-        color: rgba(255, 255, 255, 0.5);
-        margin-bottom: 0.25rem;
+        font-size: 0.7rem;
+        color: rgba(255, 255, 255, 0.45);
+        margin-bottom: 0.15rem;
     }
     
     .sidebar-metric-value {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 700;
         color: #e8f5e9;
     }
     
-    /* === BOTONES DE EJEMPLO === */
-    .ejemplo-btn {
-        width: 100%;
-        text-align: left;
-        padding: 0.7rem 1rem;
-        margin-bottom: 0.4rem;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        color: rgba(255, 255, 255, 0.8);
-        font-size: 0.85rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-family: 'Inter', sans-serif;
-    }
-    
-    .ejemplo-btn:hover {
-        background: rgba(129, 199, 132, 0.15);
-        border-color: rgba(129, 199, 132, 0.3);
-        color: white;
-        transform: translateX(3px);
-    }
-    
-    /* === CARD DE CONSULTA === */
-    .consulta-card {
-        background: white;
-        border-radius: 20px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
-        border: 1px solid rgba(0, 0, 0, 0.04);
-        margin: 1.5rem 0;
-    }
-    
-    /* === RESPUESTA === */
-    .respuesta-container {
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        box-shadow: 0 4px 24px rgba(27, 94, 32, 0.08);
-        border: 1px solid rgba(27, 94, 32, 0.1);
-        margin: 1.5rem 0;
-        border-left: 4px solid #2e7d32;
-    }
-    
-    .respuesta-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #2e7d32;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    
-    .respuesta-texto {
-        font-size: 1rem;
-        line-height: 1.7;
-        color: #1a1a2e;
-    }
-    
-    /* === FUENTES === */
-    .fuentes-container {
-        background: #f8fbf8;
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin: 1.5rem 0;
-        border: 1px solid #e8f5e9;
-    }
-    
-    .fuentes-title {
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: #558b2f;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 1rem;
-    }
-    
-    /* === STATUS BADGE === */
     .status-badge {
         display: inline-flex;
         align-items: center;
-        gap: 0.4rem;
-        padding: 0.3rem 0.8rem;
+        gap: 0.3rem;
+        padding: 0.25rem 0.7rem;
         border-radius: 100px;
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         font-weight: 600;
     }
     
@@ -275,13 +169,77 @@ st.markdown("""
         border: 1px solid rgba(255, 183, 77, 0.3);
     }
     
-    /* === INPUT === */
+    /* === CHAT - BURBUJAS === */
+    .chat-container {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    
+    .bubble-user {
+        background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+        border: 1px solid #c8e6c9;
+        border-radius: 18px 18px 4px 18px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+        color: #1a1a2e;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    .bubble-assistant {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 18px 18px 18px 4px;
+        padding: 1.25rem 1.5rem;
+        margin-bottom: 0.75rem;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+        line-height: 1.7;
+        animation: fadeIn 0.3s ease-out;
+    }
+    
+    .bubble-assistant p {
+        margin: 0 0 0.75rem 0;
+    }
+    
+    .bubble-assistant p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .bubble-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    
+    .bubble-label-user {
+        color: #2e7d32;
+    }
+    
+    .bubble-label-assistant {
+        color: #1565c0;
+    }
+    
+    /* === INPUT AREA === */
+    .input-area {
+        background: white;
+        border-radius: 20px;
+        padding: 0.75rem;
+        box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.06);
+        border: 1px solid #e8e8e8;
+        margin-top: 1rem;
+    }
+    
     .stTextArea textarea {
         border-radius: 14px !important;
         border: 2px solid #e0e0e0 !important;
-        font-size: 0.95rem !important;
+        font-size: 0.9rem !important;
         transition: all 0.2s ease !important;
         background: #fafafa !important;
+        padding: 0.75rem 1rem !important;
     }
     
     .stTextArea textarea:focus {
@@ -290,87 +248,125 @@ st.markdown("""
         background: white !important;
     }
     
-    .stTextArea textarea::placeholder {
-        color: #9e9e9e !important;
-    }
-    
-    /* === BOTÓN PRINCIPAL === */
-    .stButton button {
-        background: linear-gradient(135deg, #2e7d32 0%, #388e3c 50%, #43a047 100%) !important;
+    /* === BOTÓN ENVIAR === */
+    div[data-testid="column"] .stButton button {
+        background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%) !important;
         color: white !important;
         border: none !important;
         border-radius: 14px !important;
-        padding: 0.75rem 2rem !important;
+        padding: 0.6rem 1.5rem !important;
         font-weight: 700 !important;
-        font-size: 1rem !important;
+        font-size: 0.9rem !important;
         transition: all 0.2s ease !important;
-        box-shadow: 0 4px 16px rgba(46, 125, 50, 0.3) !important;
-        letter-spacing: 0.3px !important;
+        box-shadow: 0 4px 12px rgba(46, 125, 50, 0.25) !important;
+        width: 100% !important;
     }
     
-    .stButton button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 24px rgba(46, 125, 50, 0.4) !important;
+    div[data-testid="column"] .stButton button:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 6px 20px rgba(46, 125, 50, 0.35) !important;
     }
     
-    .stButton button:active {
-        transform: translateY(0) !important;
+    /* === BOTONES SIDEBAR === */
+    div[data-testid="stSidebar"] .stButton button {
+        background: rgba(255, 255, 255, 0.06) !important;
+        color: rgba(255, 255, 255, 0.8) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 10px !important;
+        padding: 0.6rem 1rem !important;
+        font-size: 0.82rem !important;
+        font-weight: 400 !important;
+        text-align: left !important;
+        transition: all 0.2s ease !important;
+        box-shadow: none !important;
+        margin-bottom: 0.3rem !important;
+    }
+    
+    div[data-testid="stSidebar"] .stButton button:hover {
+        background: rgba(129, 199, 132, 0.15) !important;
+        border-color: rgba(129, 199, 132, 0.3) !important;
+        color: white !important;
+        transform: translateX(3px) !important;
+    }
+    
+    /* === FUENTES === */
+    .fuentes-container {
+        background: #f8fbf8;
+        border-radius: 16px;
+        padding: 1.25rem;
+        margin: 0.75rem 0;
+        border: 1px solid #e8f5e9;
+    }
+    
+    .fuentes-title {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #558b2f;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.75rem;
+    }
+    
+    /* === WELCOME === */
+    .welcome-card {
+        background: white;
+        border-radius: 20px;
+        padding: 3rem 2rem;
+        text-align: center;
+        box-shadow: 0 2px 20px rgba(0, 0, 0, 0.04);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        margin: 2rem 0;
+    }
+    
+    .welcome-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .welcome-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 0.5rem;
+    }
+    
+    .welcome-text {
+        font-size: 0.9rem;
+        color: #757575;
+        line-height: 1.6;
+        max-width: 400px;
+        margin: 0 auto;
+    }
+    
+    /* === ANIMACIONES === */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
     /* === FOOTER === */
     .footer {
         text-align: center;
-        margin-top: 3rem;
-        padding: 2rem;
-        color: rgba(0, 0, 0, 0.35);
-        font-size: 0.8rem;
-        border-top: 1px solid rgba(0, 0, 0, 0.05);
+        margin-top: 2rem;
+        padding: 1.5rem;
+        color: rgba(0, 0, 0, 0.3);
+        font-size: 0.75rem;
     }
     
-    /* === DIVIDER === */
-    .custom-divider {
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.08), transparent);
-        margin: 1.5rem 0;
-    }
-    
-    /* === SPINNER === */
-    .stSpinner > div {
-        border-color: #2e7d32 !important;
-    }
+    /* === OCULTAR ELEMENTOS POR DEFECTO === */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .stDeployButton {display: none;}
     
     /* === RESPONSIVE === */
     @media (max-width: 768px) {
         .header-container {
-            padding: 1.5rem;
+            padding: 1.25rem 1.5rem;
             margin: -2rem -1rem 1rem -1rem;
             border-radius: 0 0 20px 20px;
         }
-        .header-title {
-            font-size: 1.8rem;
-        }
+        .header-title { font-size: 1.4rem; }
     }
-    
-    /* === ANIMACIONES === */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .respuesta-container {
-        animation: fadeInUp 0.4s ease-out;
-    }
-    
-    /* === OCULTAR ELEMENTOS POR DEFECTO DE STREAMLIT === */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDeployButton {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -395,20 +391,19 @@ def mostrar_citaciones(documentos: list) -> None:
     if not citaciones:
         return
 
-    with st.container():
-        st.markdown('<div class="fuentes-container">', unsafe_allow_html=True)
-        st.markdown('<p class="fuentes-title">📖 Fuentes consultadas</p>', unsafe_allow_html=True)
-        
-        for indice, citacion in enumerate(citaciones[:3], start=1):  # Mostrar máximo 3
-            pagina = f" · pág. {citacion.pagina}" if citacion.pagina is not None else ""
-            fuente = citacion.fuente or "Documento técnico"
-            with st.expander(f"📄 {fuente}{pagina}", expanded=False):
-                st.markdown(f'<div style="font-size:0.9rem; line-height:1.6; color:#424242;">{citacion.contenido}</div>', unsafe_allow_html=True)
-        
-        if len(citaciones) > 3:
-            st.markdown(f'<p style="text-align:center;font-size:0.8rem;color:#9e9e9e;margin-top:0.5rem;">+ {len(citaciones) - 3} fuente(s) adicional(es)</p>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div class="fuentes-container">', unsafe_allow_html=True)
+    st.markdown('<p class="fuentes-title">📖 Fuentes consultadas</p>', unsafe_allow_html=True)
+    
+    for indice, citacion in enumerate(citaciones[:3], start=1):
+        pagina = f" · pág. {citacion.pagina}" if citacion.pagina is not None else ""
+        fuente = citacion.fuente or "Documento técnico"
+        with st.expander(f"📄 {fuente}{pagina}", expanded=False):
+            st.markdown(f'<div style="font-size:0.85rem; line-height:1.6; color:#424242;">{citacion.contenido}</div>', unsafe_allow_html=True)
+    
+    if len(citaciones) > 3:
+        st.markdown(f'<p style="text-align:center;font-size:0.75rem;color:#9e9e9e;margin-top:0.5rem;">+ {len(citaciones) - 3} fuente(s) adicional(es)</p>', unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def consultar(pregunta: str, grafo) -> dict | None:
@@ -423,6 +418,17 @@ def consultar(pregunta: str, grafo) -> dict | None:
 
 
 # ============================================================================
+# INICIALIZACIÓN DEL ESTADO DE SESIÓN
+# ============================================================================
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+if "ultima_pregunta" not in st.session_state:
+    st.session_state.ultima_pregunta = ""
+
+
+# ============================================================================
 # HEADER
 # ============================================================================
 
@@ -430,10 +436,6 @@ st.markdown("""
 <div class="header-container">
     <div class="header-title">🌱 AgronomIA</div>
     <div class="header-subtitle">Asistente técnico inteligente para el cultivo de cannabis medicinal</div>
-    <div class="header-badge">
-        <span>⚡</span> 
-        <span>Potenciado con RAG + LangGraph</span>
-    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -444,17 +446,8 @@ st.markdown("""
 
 try:
     grafo, total_documentos = inicializar_agente()
-    init_ok = True
 except FileNotFoundError:
-    st.error("""
-        ### 📁 No se encontraron documentos
-        
-        Asegúrate de haber subido los archivos PDF a la carpeta `docs/` del repositorio.
-    """)
-    st.stop()
-    init_ok = False
-except ImportError as e:
-    st.error(f"### ❌ Dependencia faltante\n\n```\n{e}\n```")
+    st.error("### 📁 No se encontraron documentos\n\nAsegúrate de haber subido los archivos PDF a la carpeta `docs/` del repositorio.")
     st.stop()
 except Exception as exc:
     st.error(f"### ❌ Error de inicialización\n\n```\n{exc}\n```")
@@ -498,80 +491,136 @@ with st.sidebar:
     # --- Consultas rápidas ---
     st.markdown('<p class="sidebar-section-title">Consultas rápidas</p>', unsafe_allow_html=True)
     
-    ejemplos = [
-        "🌿 ¿Qué producto controla Botrytis?",
-        "🧪 ¿Cuál es la dosis para control de plagas?",
-        "🔬 ¿Cómo identificar síntomas de enfermedad foliar?",
-        "🍄 ¿Qué fungicidas recomiendas para cannabis?",
-    ]
+    boton_clickeado = None
+    if st.button("🌿 ¿Qué producto controla Botrytis?", use_container_width=True, key="q1"):
+        boton_clickeado = "🌿 ¿Qué producto controla Botrytis?"
+    if st.button("🧪 ¿Cuál es la dosis para control de plagas?", use_container_width=True, key="q2"):
+        boton_clickeado = "🧪 ¿Cuál es la dosis para control de plagas?"
+    if st.button("🔬 ¿Cómo identificar síntomas de enfermedad foliar?", use_container_width=True, key="q3"):
+        boton_clickeado = "🔬 ¿Cómo identificar síntomas de enfermedad foliar?"
+    if st.button("🍄 ¿Qué fungicidas recomiendas para cannabis?", use_container_width=True, key="q4"):
+        boton_clickeado = "🍄 ¿Qué fungicidas recomiendas para cannabis?"
     
-    for ejemplo in ejemplos:
-        if st.button(ejemplo, use_container_width=True, key=f"btn_{ejemplo[:10]}"):
-            st.session_state["pregunta"] = ejemplo
-    
-    # --- Info ---
+    # --- Acerca de ---
     st.markdown('<p class="sidebar-section-title">Acerca de</p>', unsafe_allow_html=True)
-    
     st.markdown("""
-    <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 1rem; margin-top: 0.5rem;">
-        <p style="font-size:0.8rem; color:rgba(255,255,255,0.5); line-height:1.5; margin:0;">
-            <strong style="color:rgba(255,255,255,0.7);">AgronomIA</strong> utiliza 
-            <strong style="color:#81c784;">RAG</strong> (Retrieval Augmented Generation) 
-            para responder preguntas técnicas basándose en documentos PDF especializados.
+    <div style="background: rgba(255,255,255,0.04); border-radius: 12px; padding: 0.75rem; margin-top: 0.25rem;">
+        <p style="font-size:0.75rem; color:rgba(255,255,255,0.4); line-height:1.5; margin:0;">
+            <strong style="color:rgba(255,255,255,0.6);">AgronomIA</strong> usa 
+            <strong style="color:#81c784;">RAG</strong> para responder preguntas 
+            técnicas basándose en documentos PDF especializados.
         </p>
     </div>
     """, unsafe_allow_html=True)
 
 
 # ============================================================================
-# ÁREA PRINCIPAL - CONSULTA
+# ÁREA PRINCIPAL - CHAT
 # ============================================================================
 
-st.markdown('<div class="consulta-card">', unsafe_allow_html=True)
+# Procesar clic en botón rápido del sidebar
+if boton_clickeado:
+    # Extraer solo el texto sin el emoji
+    pregunta_texto = boton_clickeado.split(" ", 1)[1] if " " in boton_clickeado else boton_clickeado
+    st.session_state.ultima_pregunta = pregunta_texto
+    
+    # Ejecutar la consulta directamente
+    resultado = consultar(pregunta_texto, grafo)
+    if resultado:
+        st.session_state.chat_history.append({
+            "tipo": "usuario",
+            "contenido": pregunta_texto
+        })
+        st.session_state.chat_history.append({
+            "tipo": "asistente",
+            "contenido": resultado.get("respuesta", "No lo sé"),
+            "citaciones": resultado.get("citaciones") or []
+        })
 
-st.markdown("""
-<p style="font-size:0.9rem; font-weight:600; color:#424242; margin-bottom:0.5rem;">
-    💬 ¿En qué puedo ayudarte hoy?
-</p>
-""", unsafe_allow_html=True)
+# Mostrar historial del chat
+chat_container = st.container()
+
+with chat_container:
+    if not st.session_state.chat_history:
+        # Pantalla de bienvenida
+        st.markdown("""
+        <div class="welcome-card">
+            <div class="welcome-icon">🌱</div>
+            <div class="welcome-title">Bienvenido a AgronomIA</div>
+            <div class="welcome-text">
+                Soy tu asistente técnico especializado en cultivo de cannabis medicinal. 
+                Pregúntame sobre plagas, enfermedades, productos y dosis recomendadas.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        for mensaje in st.session_state.chat_history:
+            if mensaje["tipo"] == "usuario":
+                st.markdown(f"""
+                <div class="bubble-user">
+                    <div class="bubble-label bubble-label-user">👤 Tú</div>
+                    {mensaje["contenido"]}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="bubble-assistant">
+                    <div class="bubble-label bubble-label-assistant">🌱 AgronomIA</div>
+                    {mensaje["contenido"].replace(chr(10), "<br>")}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                if mensaje.get("citaciones"):
+                    mostrar_citaciones(mensaje["citaciones"])
+
+
+# ============================================================================
+# INPUT - SIEMPRE VISIBLE ABAJO
+# ============================================================================
+
+st.markdown('<div class="input-area">', unsafe_allow_html=True)
 
 pregunta = st.text_area(
     label="",
-    key="pregunta",
-    height=100,
-    placeholder="Ej: ¿Qué producto controla la Botrytis en cultivos de cannabis? ¿Cuál es su dosis recomendada?",
+    key="input_pregunta",
+    height=70,
+    placeholder="Escribe tu pregunta técnica aquí...",
     label_visibility="collapsed",
 )
 
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    consultar_click = st.button("🔍 Consultar documentos", type="primary", use_container_width=True)
+col_input, col_btn = st.columns([4, 1])
+with col_btn:
+    enviar = st.button("Enviar", type="primary", use_container_width=True)
 
 st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================================
-# RESULTADOS
+# PROCESAR ENVÍO DESDE EL INPUT
 # ============================================================================
 
-if consultar_click and pregunta.strip():
-    resultado = consultar(pregunta.strip(), grafo)
+if enviar and pregunta.strip():
+    pregunta_texto = pregunta.strip()
+    st.session_state.ultima_pregunta = pregunta_texto
+    
+    # Ejecutar consulta
+    resultado = consultar(pregunta_texto, grafo)
     if resultado:
-        respuesta = resultado.get("respuesta", "No lo sé")
-        
-        # Mostrar respuesta
-        st.markdown("""
-        <div class="respuesta-container">
-            <div class="respuesta-label">💬 Respuesta</div>
-            <div class="respuesta-texto">{}</div>
-        </div>
-        """.format(respuesta.replace("\n", "<br>")), unsafe_allow_html=True)
-        
-        # Mostrar fuentes
-        mostrar_citaciones(resultado.get("citaciones") or [])
-        
-elif consultar_click and not pregunta.strip():
-    st.warning("✏️ Por favor, escribe una pregunta antes de consultar.")
+        st.session_state.chat_history.append({
+            "tipo": "usuario",
+            "contenido": pregunta_texto
+        })
+        st.session_state.chat_history.append({
+            "tipo": "asistente",
+            "contenido": resultado.get("respuesta", "No lo sé"),
+            "citaciones": resultado.get("citaciones") or []
+        })
+    
+    # Limpiar el input y recargar
+    st.rerun()
+    
+elif enviar and not pregunta.strip():
+    st.warning("✏️ Por favor, escribe una pregunta.")
 
 
 # ============================================================================
@@ -580,7 +629,6 @@ elif consultar_click and not pregunta.strip():
 
 st.markdown("""
 <div class="footer">
-    🌱 AgronomIA — Asistente Técnico Agrícola con RAG<br>
-    <span style="font-size:0.75rem;">Desarrollado con LangChain · LangGraph · FAISS · Groq · Streamlit</span>
+    🌱 AgronomIA · Asistente Técnico con RAG
 </div>
 """, unsafe_allow_html=True)
