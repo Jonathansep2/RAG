@@ -61,11 +61,12 @@ load_dotenv(ENV_FILE)
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 LLM_MODEL = "llama-3.3-70b-versatile"
-LLM_TEMPERATURE = 0
+LLM_TEMPERATURE = 0.3  # Un poco de creatividad para mejores respuestas
 
-CHUNK_SIZE = 300
-CHUNK_OVERLAP = 30
-RETRIEVER_K = 5
+# Chunks más grandes para dar contexto suficiente al LLM
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
+RETRIEVER_K = 8  # Traer más fragmentos para cubrir mejor la respuesta
 EMBEDDINGS_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 # Detecta si estamos en Streamlit Cloud (entorno efímero sin escritura persistente)
@@ -128,11 +129,32 @@ Reglas:
 Responde SOLO con JSON válido, sin explicaciones adicionales."""
 
 PROMPT_SYSTEM_RAG = (
-    "Eres AgronomIA, un asistente técnico especializado en cultivo de cannabis medicinal. "
-    "Tu rol es ayudar a ingenieros agrónomos con preguntas sobre manejo fitosanitario, "
-    "plagas, enfermedades, agroinsumos y recomendaciones de aplicación. "
-    "Responde usando únicamente la información del contexto proporcionado. "
-    "Si no hay información suficiente, responde exactamente: No lo sé."
+    "Eres AgronomIA, un asistente técnico experto en cultivo de cannabis medicinal. "
+    "Tu función es ayudar a ingenieros agrónomos y agricultores con preguntas detalladas sobre:\n"
+    "- Manejo fitosanitario (plagas, enfermedades, malezas)\n"
+    "- Productos agroquímicos (fungicidas, insecticidas, bactericidas, acaricidas)\n"
+    "- Dosis, formas de aplicación y períodos de carencia\n"
+    "- Síntomas y diagnosis de problemas en cultivos\n"
+    "- Recomendaciones técnicas para el control de plagas y enfermedades\n\n"
+    "Utiliza la información del contexto proporcionado para elaborar una respuesta COMPLETA y DETALLADA "
+    "de al menos un párrafo. Organiza la información de forma clara: menciona el producto, "
+    "su ingrediente activo, la dosis recomendada, el método de aplicación y cualquier otra "
+    "información relevante del contexto.\n\n"
+    "Si en el contexto hay información sobre dosis, inclúyela específicamente (por ejemplo, "
+    "'1.5 L/ha' o '2 cc/L'). Si el contexto contiene datos sobre período de carencia o "
+    "restricciones, menciónalos también.\n\n"
+    "Si el contexto no contiene suficiente información para responder adecuadamente, responde: "
+    "'No encontré suficiente información en los documentos técnicos para responder tu consulta.'"
+)
+
+PROMPT_SYSTEM_RAG_FALLBACK = (
+    "Eres AgronomIA, un asistente técnico experto en cultivo de cannabis medicinal. "
+    "A continuación se presentan fragmentos de documentos técnicos. Usa esta información "
+    "para responder de manera COMPLETA y DETALLADA la pregunta del usuario.\n\n"
+    "Fragmentos de documentos:\n{contexto}\n\n"
+    "Pregunta: {pregunta}\n\n"
+    "IMPORTANTE: Redacta una respuesta de al menos un párrafo completo, detallando "
+    "productos, dosis, aplicaciones y cualquier información relevante."
 )
 
 
@@ -461,7 +483,7 @@ def busqueda_de_respuestas_RAG(pregunta: str, retriever) -> Dict:
     if not documentos_relacionados:
         log_warning("No se encontraron documentos relacionados")
         return {
-            "respuesta": "No lo sé",
+            "respuesta": "No encontré información en los documentos técnicos disponibles para responder tu consulta.",
             "citaciones": [],
             "documentos_encontrados": False,
         }
@@ -469,10 +491,13 @@ def busqueda_de_respuestas_RAG(pregunta: str, retriever) -> Dict:
     log_info(f"OK {len(documentos_relacionados)} documento(s) encontrado(s)")
 
     if llm is None:
-        answer = resumir_contexto_recuperado(documentos_relacionados)
+        answer = resumir_contexto_recuperado(documentos_relacionados, pregunta)
     else:
         try:
-            contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
+            contexto = "\n\n---\n\n".join(
+                f"[{i+1}] {doc.page_content}" 
+                for i, doc in enumerate(documentos_relacionados)
+            )
             respuesta = llm.invoke(
                 [
                     SystemMessage(content=PROMPT_SYSTEM_RAG),
@@ -484,15 +509,12 @@ def busqueda_de_respuestas_RAG(pregunta: str, retriever) -> Dict:
             answer = getattr(respuesta, "content", str(respuesta)).strip()
         except Exception as exc:
             log_error(f"Error generando respuesta RAG: {exc}")
-            answer = resumir_contexto_recuperado(documentos_relacionados)
+            answer = resumir_contexto_recuperado(documentos_relacionados, pregunta)
 
-    if answer.rstrip(".?!") == "No lo sé":
-        log_info("Respuesta: No lo sé")
-        return {
-            "respuesta": "No lo sé",
-            "citaciones": [],
-            "documentos_encontrados": False,
-        }
+    # Verificar si la respuesta es útil o es un "no sé"
+    if len(answer) < 30 and ("no lo sé" in answer.lower() or "no sé" in answer.lower()):
+        log_info("Respuesta insuficiente, usando resumen alternativo")
+        answer = resumir_contexto_recuperado(documentos_relacionados, pregunta)
 
     log_info(f"OK Respuesta generada ({len(answer)} caracteres)")
     return {
@@ -502,10 +524,41 @@ def busqueda_de_respuestas_RAG(pregunta: str, retriever) -> Dict:
     }
 
 
-def resumir_contexto_recuperado(documentos_relacionados: list) -> str:
-    """Respuesta mínima cuando el LLM no está disponible."""
-    contexto = "\n\n".join(doc.page_content for doc in documentos_relacionados)
-    return f"He encontrado información relevante. Resumen:\n{contexto[:500]}"
+def resumir_contexto_recuperado(documentos_relacionados: list, pregunta: str = "") -> str:
+    """Construye una respuesta detallada a partir del contexto recuperado."""
+    if not documentos_relacionados:
+        return "No se encontró información relevante en los documentos técnicos."
+
+    # Agrupar por fuente y página para ordenar la información
+    secciones = []
+    contenidos_vistos = set()
+    for doc in documentos_relacionados:
+        metadata = getattr(doc, "metadata", {})
+        fuente = metadata.get("source", "Documento")
+        if fuente:
+            fuente = fuente.split("\\")[-1].split("/")[-1]
+        pagina = metadata.get("page", 0)
+        contenido = getattr(doc, "page_content", str(doc)).strip()
+        
+        # Evitar contenido duplicado
+        if contenido[:100] in contenidos_vistos:
+            continue
+        contenidos_vistos.add(contenido[:100])
+        
+        secciones.append(f"📄 {fuente} (p. {pagina}):\n{contenido}")
+
+    if not secciones:
+        return "No se encontró información relevante en los documentos técnicos."
+
+    contexto_unido = "\n\n".join(secciones)
+    
+    return (
+        f"Según la información disponible en los documentos técnicos:\n\n"
+        f"{contexto_unido}\n\n"
+        f"---\n"
+        f"*Respuesta generada a partir de los fragmentos recuperados. "
+        f"Para una respuesta más detallada y precisa, configura la API key de Groq.*"
+    )
 
 
 # ============================================================================
@@ -532,7 +585,7 @@ def nodo_auto_resolver(state: AgentState, retriever) -> dict:
 def nodo_pedir_info(state: AgentState) -> dict:
     """Nodo que pide más información al usuario."""
     return {
-        "respuesta": "Necesito más información sobre tu consulta. ¿Puedes proporcionar detalles adicionales?",
+        "respuesta": "Necesito más información sobre tu consulta. ¿Puedes proporcionar detalles adicionales? Por ejemplo, especifica el cultivo, la plaga o enfermedad, o el tipo de producto que buscas.",
         "citaciones": [],
         "accion_final": "PEDIR_INFO",
     }

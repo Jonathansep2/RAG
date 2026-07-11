@@ -54,7 +54,7 @@ def mostrar_citaciones(documentos: list) -> None:
     if not citaciones:
         return
 
-    st.subheader("Fuentes")
+    st.subheader("📖 Fuentes consultadas")
     for indice, citacion in enumerate(citaciones, start=1):
         pagina = f" · p. {citacion.pagina}" if citacion.pagina is not None else ""
         fuente = citacion.fuente or "Documento"
@@ -69,7 +69,7 @@ def consultar(pregunta: str, grafo) -> dict | None:
         st.warning(error)
         return None
 
-    with st.spinner("Consultando documentos..."):
+    with st.spinner("Consultando documentos técnicos..."):
         return ejecutar_consulta(pregunta, grafo)
 
 
@@ -78,7 +78,7 @@ def consultar(pregunta: str, grafo) -> dict | None:
 # ============================================================================
 
 st.title("🌾 AgronomIA")
-st.caption("Asistente técnico para cultivo de cannabis medicinal")
+st.caption("Asistente técnico especializado en cultivo de cannabis medicinal")
 
 # Inicializar el agente (con caché de sesión)
 try:
@@ -98,12 +98,14 @@ except Exception as exc:
 
 # Sidebar
 with st.sidebar:
-    st.header("Estado")
-    st.metric("Páginas cargadas", total_documentos)
-    st.metric("Carpeta docs", "OK" if DOCS_DIR.exists() else "No disponible")
+    st.header("📚 Documentos cargados")
+    st.metric("Páginas totales", total_documentos)
 
     groq_disponible = os.getenv("GROQ_API_KEY") is not None
-    st.metric("LLM (Groq)", "Conectado" if groq_disponible else "Fallback local")
+    if groq_disponible:
+        st.success("✅ Modo: **Groq LLM** activo")
+    else:
+        st.info("ℹ️ Modo: **consulta local** (configura API key de Groq para mejores respuestas)")
 
     st.divider()
     st.header("Consultas rápidas")
@@ -111,6 +113,7 @@ with st.sidebar:
         "¿Qué producto controla Botrytis?",
         "¿Cuál es la dosis recomendada para control de plagas?",
         "¿Cómo identificar síntomas de enfermedad foliar?",
+        "¿Qué fungicidas recomiendas para cannabis?",
     ]
     for ejemplo in ejemplos:
         if st.button(ejemplo, use_container_width=True):
@@ -118,32 +121,28 @@ with st.sidebar:
 
     st.divider()
     st.caption(
-        "**AgronomIA** usa **RAG** para responder preguntas técnicas "
-        "basadas en los documentos PDF cargados en `docs/`."
+        "**AgronomIA** utiliza **RAG** (Retrieval Augmented Generation) para "
+        "responder preguntas técnicas basándose en los documentos PDF "
+        "técnicos cargados en la base de conocimiento."
     )
 
 # Área de entrada
 pregunta = st.text_area(
-    "Escribe tu pregunta",
+    "Escribe tu pregunta técnica",
     key="pregunta",
-    height=120,
+    height=100,
     placeholder="Ej: ¿Qué producto controla Botrytis?",
 )
 
 consultar_click = st.button("Consultar", type="primary", use_container_width=True)
 
 # Resultados
-if consultar_click:
+if consultar_click and pregunta.strip():
     resultado = consultar(pregunta.strip(), grafo)
     if resultado:
-        triaje = resultado.get("triaje", {})
-
-        col_decision, col_urgencia, col_accion = st.columns(3)
-        col_decision.metric("Decisión", triaje.get("decision", "N/D"))
-        col_urgencia.metric("Urgencia", triaje.get("urgencia", "N/D"))
-        col_accion.metric("Acción final", resultado.get("accion_final", "N/D"))
-
-        st.subheader("Respuesta")
+        st.subheader("💬 Respuesta")
         st.write(resultado.get("respuesta", "No lo sé"))
 
         mostrar_citaciones(resultado.get("citaciones") or [])
+elif consultar_click and not pregunta.strip():
+    st.warning("Por favor, escribe una pregunta antes de consultar.")
