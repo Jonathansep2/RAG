@@ -12,7 +12,7 @@ langgraph==0.3.16
 
 # Vector store & embeddings
 faiss-cpu==1.10.0
-fastembed==0.6.0
+# fastembed==0.6.0  # Opcional: se instala solo si se necesita. ONNX es muy pesado para Streamlit Cloud.
 
 # Web UI
 streamlit==1.42.1

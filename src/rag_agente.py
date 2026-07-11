@@ -14,7 +14,6 @@ from typing import Dict, List, Optional, TypedDict
 
 from dotenv import load_dotenv
 from langchain_community.document_loaders import PyMuPDFLoader
-from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_core.embeddings import Embeddings
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -29,6 +28,11 @@ try:
     from langchain_groq import ChatGroq
 except ImportError:
     ChatGroq = None
+
+try:
+    from langchain_community.embeddings import FastEmbedEmbeddings
+except ImportError:
+    FastEmbedEmbeddings = None
 
 
 def configurar_salida_utf8() -> None:
@@ -300,11 +304,15 @@ def crear_retriever(documentos: List):
     chunks = splitter.split_documents(documentos)
     log_info(f"Total de chunks creados: {len(chunks)}")
 
-    try:
-        embeddings = FastEmbedEmbeddings(model_name=EMBEDDINGS_MODEL)
-        log_info("OK Usando FastEmbedEmbeddings")
-    except Exception as exc:
-        log_warning(f"FastEmbedEmbeddings no disponible, usando embeddings simples: {exc}")
+    if FastEmbedEmbeddings is not None:
+        try:
+            embeddings = FastEmbedEmbeddings(model_name=EMBEDDINGS_MODEL)
+            log_info("OK Usando FastEmbedEmbeddings")
+        except Exception as exc:
+            log_warning(f"FastEmbedEmbeddings falló al instanciar, usando embeddings simples: {exc}")
+            embeddings = EmbeddingsSimples()
+    else:
+        log_warning("FastEmbedEmbeddings no instalado (paquete fastembed opcional), usando embeddings simples")
         embeddings = EmbeddingsSimples()
 
     log_info("Creando FAISS vectorstore...")
