@@ -131,11 +131,6 @@ st.markdown("""
         font-size: 0.65rem; font-weight: 700; color: #558b2f;
         text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.5rem;
     }
-    .welcome { text-align: center; padding: 3rem 1rem; }
-    .welcome-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-    .welcome h3 { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; margin: 0 0 0.4rem 0; }
-    .welcome p { font-size: 0.85rem; color: #757575; max-width: 380px; margin: 0 auto; line-height: 1.6; }
-    .footer { text-align: center; margin-top: 2rem; padding: 1rem; color: rgba(0,0,0,0.25); font-size: 0.7rem; }
     @keyframes fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     .resp { animation: fade 0.3s ease-out; }
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} .stDeployButton {display: none;}
@@ -284,16 +279,3 @@ if st.session_state.ultima_respuesta:
         unsafe_allow_html=True,
     )
     mostrar_fuentes(resp.get("citaciones") or [])
-elif not btn and not pregunta_sel:
-    st.markdown(
-        '<div class="welcome"><div class="welcome-icon">🌱</div><h3>Bienvenido a AgronomIA</h3>'
-        '<p>Pregunta sobre plagas, enfermedades, productos y dosis para cultivo de cannabis medicinal.</p></div>',
-        unsafe_allow_html=True,
-    )
-
-
-# ============================================================================
-# FOOTER
-# ============================================================================
-
-st.markdown('<div class="footer">🌱 AgronomIA · RAG · LangChain · Groq</div>', unsafe_allow_html=True)
