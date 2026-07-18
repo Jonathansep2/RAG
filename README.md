@@ -4,8 +4,11 @@
 
 Usa documentos PDF locales, **LangChain**, **LangGraph**, **FAISS**, **FastEmbed**, **Groq (Llama 3.3 70B)** y **Streamlit**.
 
+La aplicación fue desplegada en Streamlit. Puede interactuar con la aplicación en el siguiente link (https://agronoia.streamlit.app/)
+
 
 ![Evidencia](https://github.com/Jonathansep2/RAG/blob/main/EvidenciaReto.png?raw=true)
+
 ---
 
 ## 📋 Requisitos
