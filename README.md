@@ -4,6 +4,8 @@
 
 Usa documentos PDF locales, **LangChain**, **LangGraph**, **FAISS**, **FastEmbed**, **Groq (Llama 3.3 70B)** y **Streamlit**.
 
+
+![Evidencia](https://github.com/Jonathansep2/RAG/blob/main/EvidenciaReto.png?raw=true)
 ---
 
 ## 📋 Requisitos
